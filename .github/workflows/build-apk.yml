@@ -1,14 +1,12 @@
 name: Build APK from ZIP
 
 on:
-  # 手动触发（可指定 ZIP 文件名）
   workflow_dispatch:
     inputs:
       zip_file:
-        description: 'ZIP 文件名（根目录下的，如 myapp.zip）'
+        description: 'ZIP文件名（根目录下的，如myapp.zip）'
         required: false
         default: ''
-  # 推送时自动检测根目录的 .zip 文件
   push:
     paths:
       - '*.zip'
@@ -21,7 +19,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      # ---------- 1. 定位并解压 ZIP ----------
       - name: Locate and unzip
         id: unzip
         run: |
@@ -36,7 +33,6 @@ jobs:
           echo "✅ 使用 ZIP: $ZIP"
           unzip -o "$ZIP" -d .
 
-      # ---------- 2. 可选：替换 QuantApp.kt ----------
       - name: Replace QuantApp.kt if exists
         run: |
           if [ -f ./QuantApp.kt ]; then
@@ -47,51 +43,42 @@ jobs:
             fi
           fi
 
-      # ---------- 3. 设置 JDK 17 ----------
       - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
-      # ---------- 4. 缓存 Android SDK（加速） ----------
-      - 姓名: 缓存Android SDK
-uses: 操作/缓存@v4
-和……一起:
-路径: /usr/local/lib/android/sdk
-钥匙: android-sdk-${{runner.os}}
+      - name: Cache Android SDK
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/lib/android/sdk
+          key: android-sdk-${{ runner.os }}
 
-      #----------5.安装SDK-----------
-      - 姓名: 安装Android SDK
-uses: android-actions/setup-android@v3
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
-      - 姓名: 安装SDK组件
-跑: |
-yes|sdkmanager--licenses>/dev/null||true
-sdkmanager"平台；android-35""构建工具；35.0.0""平台工具"
+      - name: Install SDK components
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
 
-      #----------6.缓存Gradle（加速）----------
-      - 姓名: 缓存渐变
-uses: 操作/缓存@v4
-和……一起:
-路径: |
-~/.gradle/caches/
-~/.gradle/wrapper/
-钥匙: gradle-${{runner.os}}-${{哈希文件('**/*.gradle*', '**/gradle-wrapper.properties') }}
-还原键: gradle-${{runner.os}}
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}
 
-      #----------7.设置8.9级-----------
-      - 姓名: 设置渐变
-uses: gradle/操作/设置-gradle@v4
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
-      # ---------- 8. 构建 APK ----------
       - name: Build APK
         id: build
         run: |
           set -e
-          # 自动定位工程根目录
           ROOT="."
           if [ ! -f settings.gradle.kts ] && [ ! -f settings.gradle ]; then
             ROOT=$(find . -maxdepth 3 \( -name settings.gradle.kts -o -name settings.gradle \) -printf "%h\n" | head -1)
@@ -102,7 +89,6 @@ uses: gradle/操作/设置-gradle@v4
           fi
           echo "✅ 工程根目录: $ROOT"
           cd "$ROOT"
-
           rm -rf .gradle
           if [ -f ./gradlew ]; then
             chmod +x ./gradlew
@@ -110,7 +96,6 @@ uses: gradle/操作/设置-gradle@v4
           else
             gradle clean assembleDebug --stacktrace --refresh-dependencies
           fi
-
           APK=$(find . -path "*/outputs/apk/debug/*.apk" -type f | head -1)
           if [ -z "$APK" ]; then
             echo "❌ 未生成 APK"
@@ -120,10 +105,9 @@ uses: gradle/操作/设置-gradle@v4
           cp "$APK" "$GITHUB_WORKSPACE/artifacts/app-debug.apk"
           echo "✅ APK 准备完成"
 
-      # ---------- 9. 上传 APK（唯一产出物） ----------
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
           path: artifacts/app-debug.apk
-if-no-files-found:error
+          if-no-files-found: error
